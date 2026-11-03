@@ -11,9 +11,8 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
-import { DEMO_ANALYTICS } from '../../services/mockData';
 
-export default function AttendanceChart({ weeklyData = DEMO_ANALYTICS.weeklyTrends, subjectData = DEMO_ANALYTICS.subjectBreakdown }) {
+export default function AttendanceChart({ weeklyData = [], subjectData = [] }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Weekly Attendance Trend Area Chart */}
@@ -23,13 +22,17 @@ export default function AttendanceChart({ weeklyData = DEMO_ANALYTICS.weeklyTren
             <h3 className="text-base font-bold text-slate-900">Attendance Trends</h3>
             <p className="text-xs text-slate-500">Weekly average participation rate (%)</p>
           </div>
-          <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
-            +4.2% this week
-          </span>
+          {weeklyData.length > 0 && (
+            <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-100">
+              {weeklyData.length} day{weeklyData.length === 1 ? '' : 's'}
+            </span>
+          )}
         </div>
 
         <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          {weeklyData.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-400">Attendance trends will appear after sessions are recorded.</div>
+          ) : <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="attendGradient" x1="0" y1="0" x2="0" y2="1">
@@ -59,7 +62,7 @@ export default function AttendanceChart({ weeklyData = DEMO_ANALYTICS.weeklyTren
                 fill="url(#attendGradient)"
               />
             </AreaChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>}
         </div>
       </div>
 
@@ -73,7 +76,9 @@ export default function AttendanceChart({ weeklyData = DEMO_ANALYTICS.weeklyTren
         </div>
 
         <div className="h-64 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          {subjectData.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-400">Subject statistics will appear after sessions are recorded.</div>
+          ) : <ResponsiveContainer width="100%" height="100%">
             <BarChart data={subjectData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
               <XAxis 
@@ -97,7 +102,7 @@ export default function AttendanceChart({ weeklyData = DEMO_ANALYTICS.weeklyTren
               />
               <Bar dataKey="attendance" fill="#4f46e5" radius={[6, 6, 0, 0]} maxBarSize={36} />
             </BarChart>
-          </ResponsiveContainer>
+          </ResponsiveContainer>}
         </div>
       </div>
     </div>

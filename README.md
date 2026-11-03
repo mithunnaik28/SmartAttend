@@ -1,181 +1,81 @@
-# SmartAttend – QR-Based School Attendance Management System
+# SmartAttend
 
-SmartAttend is a modern, responsive, full-stack QR attendance management system designed for schools, colleges, and educational institutions. Teachers can generate dynamic, time-limited QR codes with cryptographically random tokens, while students scan using their device cameras to record attendance with strict anti-duplicate and expiry enforcement.
+SmartAttend is a QR attendance app for schools and colleges. Teachers create expiring attendance sessions, students sign in and scan the session QR code, and administrators manage teacher/student accounts. Supabase Auth, PostgreSQL, Row Level Security, and private Storage provide the production data layer.
 
----
+## Features
 
-## 🌟 Key Features
+- Separate administrator, teacher, and student workspaces with role-gated routes.
+- Admin-managed teacher and student accounts using temporary passwords.
+- Optional student profile photos stored in a private Supabase Storage bucket.
+- Teacher session creation, QR attendance, live feed, history, and CSV reports.
+- Server-side attendance validation, class matching, expiration checks, and duplicate prevention.
+- Campus-building landing-page background and responsive layouts.
 
-### 👩‍🏫 Faculty / Teacher Portal
-- **Dashboard Analytics**: Real-time KPI cards (Total Students, Total Classes, Today's Attendance %, Present, Absent).
-- **Interactive Visualizations**: Weekly attendance trends (Area Chart) and subject-wise averages (Bar Chart) powered by Recharts.
-- **Dynamic QR Code Generator**: Creates cryptographically randomized tokens (`crypto.getRandomValues`) with customizable expiry durations (5 to 60 minutes).
-- **Live Classroom Projector Screen**: High-resolution QR code, live visual countdown timer, and a real-time attendee feed updating as students scan.
-- **Session Control**: Manually terminate/close sessions at any time to immediately cut off submissions.
-- **Attendance Management & Reports**: Comprehensive table with instant search (student name, roll number, subject), filter by class and status, sortable columns, and **1-click CSV Export**.
+## Local setup
 
-### 👨‍🎓 Student Portal
-- **Student Dashboard**: Live overall attendance percentage, eligibility status indicator (75% threshold), classes attended, and missed lecture counter.
-- **In-Browser QR Scanner**: Powered by `html5-qrcode`. Supports rear camera on smartphones and webcams on laptops, with smooth viewfinder animation and laser guide.
-- **Manual Token Fallback**: Allows students on devices without cameras or with permissions disabled to input tokens or links directly.
-- **Instant Celebratory Feedback**: Confetti animation on successful verification.
-- **Personal Attendance History**: Chronological log of all marked classes with status badges and CSV download.
+Requirements: Node.js 18+ and npm.
 
-### 🛡️ Security & Integrity Engine
-- **Duplicate Prevention**: Client-side and database-level unique constraints (`unique_student_session` on `(student_id, session_id)`) reject duplicate scans.
-- **Auto-Expiry Enforcement**: Sessions and QR tokens automatically become invalid after the configured duration.
-- **State Validation**: Closed sessions are immediately blocked from accepting new attendance entries.
-- **Supabase Row Level Security (RLS)**: Enforces role-based permissions at the PostgreSQL layer.
-
----
-
-## 🛠️ Technology Stack
-
-- **Frontend**: React 18, Vite, JavaScript, Tailwind CSS, React Router v6, Lucide React icons
-- **Backend / Database**: Supabase PostgreSQL, Supabase Authentication, Row Level Security (RLS), Stored Procedures
-- **Libraries**:
-  - `qrcode.react`: High-density SVG QR code rendering
-  - `html5-qrcode`: Cross-platform in-browser camera scanning
-  - `recharts`: Responsive statistical dashboards
-  - `date-fns`: Date, time, and relative duration calculations
-  - `canvas-confetti`: Celebratory visual feedback on verified attendance
-
----
-
-## 📁 Project Structure
-
-```
-smartattend/
-├── .env.example                     # Environment variables template
-├── index.html                       # HTML root with Plus Jakarta Sans typography
-├── package.json                     # Project dependencies & scripts
-├── postcss.config.js                # PostCSS configuration
-├── tailwind.config.js               # Tailwind custom color palette & styling
-├── vite.config.js                   # Vite bundler configuration
-├── supabase/
-│   └── schema.sql                   # Supabase PostgreSQL schema, RLS policies & seed data
-└── src/
-    ├── assets/                      # Static assets & logos
-    ├── components/
-    │   ├── common/                  # Reusable UI primitives (Button, Badge, Modal, StatCard, etc.)
-    │   ├── teacher/                 # Teacher components (QRCodeDisplay, LiveAttendanceFeed, AttendanceTable)
-    │   └── student/                 # Student components (ScannerModal, etc.)
-    ├── context/
-    │   ├── AuthContext.jsx          # Role-based auth (Teacher, Student, Demo Switcher)
-    │   ├── AttendanceContext.jsx    # Sessions & live attendance state management
-    │   └── ToastContext.jsx         # Custom notifications (Success, Error, Warning, Info)
-    ├── hooks/
-    │   └── useCountdown.js          # Precision real-time session expiry countdown
-    ├── layouts/
-    │   ├── AppLayout.jsx            # Authenticated layout with Navbar and Sidebar
-    │   └── AuthLayout.jsx           # Clean authentication layout
-    ├── lib/
-    │   └── supabase.js              # Supabase client initialization & connection checks
-    ├── pages/
-    │   ├── LandingPage.jsx          # SaaS landing page with architecture highlights
-    │   ├── LoginPage.jsx            # Multi-role login with 1-click evaluation shortcuts
-    │   ├── NotFoundPage.jsx         # 404 handler
-    │   ├── teacher/                 # Teacher dashboard, create session, live QR, reports
-    │   └── student/                 # Student dashboard, scanner, attendance history
-    ├── services/
-    │   ├── attendanceService.js     # Unified API service (Supabase DB + Local Reactive State)
-    │   └── mockData.js              # Initial demonstration dataset
-    └── utils/
-        ├── exportCsv.js             # Formatted CSV exporter
-        ├── formatters.js            # Date & duration formatting utilities
-        └── tokenGenerator.js        # Cryptographic session token generator
-```
-
----
-
-## 🚀 Getting Started
-
-### 1. Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm** or **pnpm**
-
-### 2. Installation
-```bash
-# Clone the repository and navigate into folder
-cd "anti test"
-
-# Install dependencies
+```powershell
 npm install
-```
-
-### 3. Environment Configuration
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-
-If connecting your live Supabase project:
-```env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-public-key
-```
-> **Note**: If Supabase credentials are not provided, SmartAttend seamlessly defaults to the pre-seeded **Demo State Engine**. All actions (generating QR codes, scanning, duplicate rejection, timer countdown, CSV export) are 100% functional and interactive!
-
-### 4. Run Development Server
-```bash
+Copy-Item .env.example .env
 npm run dev
 ```
-Open your browser at `http://localhost:5173`.
 
----
+By default the app does **not** authenticate against sample accounts or save fake data. Configure a Supabase project in `.env`:
 
-## 🧪 Demonstration & Test Scenarios
+```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+VITE_DEMO_MODE=false
+```
 
-The system includes pre-seeded fictional students and sample class sessions to demonstrate real-time attendance:
+The anon/publishable key is intended for the browser; database permissions are enforced by RLS. **Never put a Supabase service-role key in a `VITE_` variable or browser code.** If the database is not configured, production mode fails closed. For an isolated local preview only, set `VITE_DEMO_MODE=true`; this enables fictional data and one-click demo profiles only when Supabase is not configured.
 
-### Fictional Student Roster:
-1. **Rahul Sharma** — Roll #`101` (`rahul@student.edu`)
-2. **Arjun Verma** — Roll #`102` (`arjun@student.edu`)
-3. **Priya Patel** — Roll #`103` (`priya@student.edu`)
-4. **Sneha Reddy** — Roll #`104` (`sneha@student.edu`)
-5. **Kiran Nair** — Roll #`105` (`kiran@student.edu`)
+## Supabase setup
 
-### Faculty Account:
-- **Dr. Sarah Jenkins** — `teacher@smartattend.edu`
+1. In the Supabase SQL Editor, run [`supabase/schema.sql`](./supabase/schema.sql). It is designed to be re-runnable and does not drop tables or seed demo users. Back up existing data and review any local schema customizations before applying it. If this project was previously initialized with the old demo schema, review and remove its fictional seed rows before production; this migration intentionally preserves existing records.
+2. Create the first administrator in **Authentication → Users**. Copy that user's UUID and add the corresponding profile in the SQL Editor:
 
----
+   ```sql
+   insert into public.admins (user_id, full_name, email)
+   values ('AUTH_USER_UUID', 'School Administrator', 'admin@school.edu');
+   ```
 
-### 🔍 Verification Tests to Perform:
+   Keep the initial password private; the account can request a password-reset email from the sign-in page.
+3. Install and link the Supabase CLI, then deploy the account-provisioning Edge Function:
 
-#### 1. Successful Attendance Marking:
-1. Log in as **Dr. Sarah Jenkins** (Teacher). Click **Create Session** and generate an active QR code.
-2. In the sidebar or login page, switch to **Arjun Verma (#102)** or **Sneha Reddy (#104)**.
-3. Navigate to **Scan QR Code** and scan the QR code (or click the quick-test token **"1. Valid QR"**).
-4. 🎉 **Result**: Confetti triggers, status changes to "Attendance Verified!", and the record immediately appears on the teacher's live attendee feed.
+   ```powershell
+   supabase login
+   supabase link --project-ref YOUR_PROJECT_REF
+   supabase functions deploy admin-create-user
+   ```
 
-#### 2. Duplicate Attendance Rejection:
-1. While logged in as **Rahul (#101)** or **Priya (#103)** (who already checked into the live session), scan the active QR code again.
-2. ⚠️ **Result**: Rejection modal/alert displays:
-   > *"Duplicate submission rejected! Your attendance for this session was already recorded at [Time]."*
+   The function verifies the caller's Supabase JWT and `admins` record before it creates a confirmed Auth user and matching profile. Supabase supplies the function's service-role secret at runtime; it is never sent to the browser. Account creation is rolled back if profile creation fails.
+4. Configure the Supabase Auth site's **Site URL** and **Redirect URLs** for your deployed app so password-reset links return to the correct domain.
+5. In your hosting provider, set `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_DEMO_MODE=false`, then build and deploy:
 
-#### 3. Expired QR Rejection:
-1. In the student scanner, scan an expired token (or click quick-test token **"3. Expired QR"**).
-2. ❌ **Result**: Rejection alert displays:
-   > *"This QR code has expired. Expired submissions are strictly rejected."*
+   ```powershell
+   npm run build
+   ```
 
----
+Administrators can add teachers and students at `/admin/users`. Temporary passwords must be at least 12 characters; users should replace them using the password-reset email. Student photos are private, limited to JPG/PNG/WebP files up to 5 MB, and served through short-lived signed URLs.
 
-## 🗄️ Supabase PostgreSQL Schema & RLS Setup
+## Security notes
 
-To deploy the schema to your Supabase instance:
-1. Open your [Supabase Dashboard](https://supabase.com/dashboard).
-2. Navigate to the **SQL Editor**.
-3. Copy and run the SQL code from [`supabase/schema.sql`](./supabase/schema.sql).
+- Attendance identity is derived from `auth.uid()` in PostgreSQL; clients cannot submit another student's profile ID.
+- The database checks the student's class/section, session state, and expiry, and the unique student/session constraint prevents concurrent duplicates.
+- Students can read only their own profile and attendance. Teachers are limited to their own sessions and the associated class roster. Admin privileges come from the protected `admins` table, not editable browser metadata.
+- Session tokens are not readable through student table queries. The attendance RPC validates submitted tokens without exposing the sessions table to students.
+- QR attendance can prevent duplicate or unauthorized account submissions, but a static QR can still be shared with another person during its validity window. Keep session lifetimes short and use in-person identity checks for high-stakes attendance.
 
-### Key SQL Components Included:
-- **`teachers` table**: Stores faculty profile information.
-- **`students` table**: Stores student records, roll numbers, and assigned classes.
-- **`sessions` table**: Tracks generated QR sessions, expiry timestamps, and active status.
-- **`attendance` table**: Records student check-ins with foreign keys and a `UNIQUE(student_id, session_id)` constraint.
-- **Row Level Security (RLS)**: Enforces read/write access policies for authenticated students and teachers.
-- **`mark_qr_attendance()` Stored Procedure**: Performs server-side cryptographic token validation, expiration check, duplicate detection, and atomic insertion.
+## Demo mode
 
----
+Demo data is fictional, browser-local, and intended only for previews. It is not a database connection and must not be used for real attendance. Enable it explicitly with `VITE_DEMO_MODE=true` and no Supabase credentials. Demo role switching is hidden in connected/production mode.
 
-## 📄 License
-MIT License. Built for hackathon demonstration.
+## Project structure
+
+- `src/pages`: landing, role-specific dashboards, scanner, reports, and admin directory.
+- `src/context`: authentication, attendance state, and notifications.
+- `src/services/attendanceService.js`: Supabase operations and explicitly gated demo storage.
+- `supabase/schema.sql`: PostgreSQL tables, RLS policies, attendance RPCs, and private avatar storage.
+- `supabase/functions/admin-create-user`: server-side administrator-only account provisioning.

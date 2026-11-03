@@ -16,7 +16,7 @@ import {
 import { useAttendance } from '../../context/AttendanceContext';
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { user, isTeacher, isStudent, loginAsDemo, demoStudents, demoTeacher } = useAuth();
+  const { user, isTeacher, isAdmin, loginAsDemo, demoStudents, isDemoMode } = useAuth();
   const { resetDemoData, activeSession } = useAttendance();
   const location = useLocation();
 
@@ -63,7 +63,11 @@ export default function Sidebar({ isOpen, onClose }) {
     }
   ];
 
-  const links = isTeacher ? teacherLinks : studentLinks;
+  const adminLinks = [
+    { to: '/admin/users', label: 'People & access', icon: Users }
+  ];
+
+  const links = isAdmin ? adminLinks : isTeacher ? teacherLinks : studentLinks;
 
   const handleLinkClick = () => {
     if (window.innerWidth < 768) {
@@ -97,7 +101,7 @@ export default function Sidebar({ isOpen, onClose }) {
               <div>
                 <span className="font-extrabold text-slate-900 text-base">SmartAttend</span>
                 <span className="block text-[10px] uppercase font-bold text-slate-400 -mt-1 tracking-wider">
-                  {isTeacher ? 'Faculty Portal' : 'Student Portal'}
+                  {isAdmin ? 'Administrator' : isTeacher ? 'Faculty Portal' : 'Student Portal'}
                 </span>
               </div>
             </div>
@@ -149,7 +153,7 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
 
         {/* Footer: Quick Role Switcher (Ideal for hackathon presentation!) */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+        {isDemoMode && <div className="p-4 border-t border-slate-100 bg-slate-50/50">
           <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-subtle">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
@@ -201,7 +205,7 @@ export default function Sidebar({ isOpen, onClose }) {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </aside>
     </>
   );

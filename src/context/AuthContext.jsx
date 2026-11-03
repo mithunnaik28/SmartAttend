@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, isDemoMode, requireSupabase } from '../lib/supabase';
 import { DEMO_TEACHER, DEMO_STUDENTS } from '../services/mockData';
 
 const AuthContext = createContext(null);
@@ -8,123 +8,123 @@ const AUTH_STORAGE_KEY = 'smartattend_current_user';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
+    if (!isDemoMode()) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
+    }
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
       return stored ? JSON.parse(stored) : null;
-    } catch {
+    } catch (error) {
+      console.error('Could not restore the demo user:', error);
       return null;
     }
   });
   const [loading, setLoading] = useState(true);
 
-  // Initialize Supabase Auth listener if enabled
   useEffect(() => {
     if (isSupabaseConfigured() && supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          fetchProfile(session.user);
-        } else {
-          setLoading(false);
-        }
-      });
-
+      supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+        if (error) throw error;
+        if (session?.user) await fetchProfile(session.user);
+      }).catch((error) => {
+        console.error('Could not restore the Supabase session:', error);
+        setUser(null);
+      }).finally(() => setLoading(false));
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
-          fetchProfile(session.user);
+          setTimeout(() => {
+            fetchProfile(session.user).catch((error) => {
+              console.error('Could not load the signed-in user profile:', error);
+              setUser(null);
+            });
+          }, 0);
         } else {
-          // If no supabase session and not a local demo session, clear
-          if (!localStorage.getItem(AUTH_STORAGE_KEY)) {
-            setUser(null);
-          }
+          setUser(null);
           setLoading(false);
         }
       });
-
       return () => subscription.unsubscribe();
-    } else {
-      setLoading(false);
     }
+    setLoading(false);
   }, []);
 
   const fetchProfile = async (authUser) => {
-    try {
-      // Check if user is a teacher
-      const { data: teacher } = await supabase
+    const client = requireSupabase();
+    const { data: administrator, error: adminError } = await client
+      .from('admins')
+      .select('id, user_id, full_name, email')
+      .eq('user_id', authUser.id)
+      .maybeSingle();
+    if (adminError) throw adminError;
+
+    let profile = administrator && { ...administrator, role: 'admin' };
+    if (!profile) {
+      const { data: teacher, error: teacherError } = await client
         .from('teachers')
-        .select('*')
+        .select('id, user_id, full_name, email, department')
         .eq('user_id', authUser.id)
-        .single();
-
-      if (teacher) {
-        const fullUser = {
-          id: teacher.id,
-          user_id: authUser.id,
-          email: authUser.email,
-          full_name: teacher.full_name,
-          role: 'teacher',
-          department: teacher.department
-        };
-        setUser(fullUser);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fullUser));
-        setLoading(false);
-        return;
-      }
-
-      // Check if user is a student
-      const { data: student } = await supabase
-        .from('students')
-        .select('*')
-        .eq('user_id', authUser.id)
-        .single();
-
-      if (student) {
-        const fullUser = {
-          id: student.id,
-          user_id: authUser.id,
-          email: authUser.email,
-          full_name: student.full_name,
-          roll_number: student.roll_number,
-          class_name: student.class_name,
-          section: student.section,
-          role: 'student'
-        };
-        setUser(fullUser);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(fullUser));
-      }
-    } catch (err) {
-      console.error('Error fetching profile', err);
-    } finally {
-      setLoading(false);
+        .maybeSingle();
+      if (teacherError) throw teacherError;
+      if (teacher) profile = { ...teacher, role: 'teacher' };
     }
+    if (!profile) {
+      const { data: student, error: studentError } = await client
+        .from('students')
+        .select('id, user_id, full_name, email, roll_number, class_name, section, avatar_url')
+        .eq('user_id', authUser.id)
+        .maybeSingle();
+      if (studentError) throw studentError;
+      if (student) {
+        let avatar = student.avatar_url;
+        if (avatar && !avatar.startsWith('http')) {
+          const { data, error } = await client.storage
+            .from('student-avatars')
+            .createSignedUrl(avatar, 3600);
+          if (error) throw error;
+          avatar = data.signedUrl;
+        }
+        profile = { ...student, avatar, role: 'student' };
+      }
+    }
+
+    if (!profile) {
+      throw new Error('This login is not linked to an active SmartAttend profile. Contact your administrator.');
+    }
+    const fullUser = { ...profile, user_id: authUser.id, email: profile.email || authUser.email };
+    setUser(fullUser);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return fullUser;
   };
 
-  /**
-   * Log in with email & password (supports Supabase & Demo fallbacks)
-   */
   const login = async (email, password, roleHint = 'teacher') => {
     setLoading(true);
     try {
       if (isSupabaseConfigured() && supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim().toLowerCase(),
           password
         });
         if (error) throw error;
-        await fetchProfile(data.user);
-        return { success: true, user: data.user };
+        try {
+          const profile = await fetchProfile(data.user);
+          return { success: true, user: profile };
+        } catch (profileError) {
+          await supabase.auth.signOut();
+          throw profileError;
+        }
       }
 
-      // Demo Login Mode
+      if (!isDemoMode()) {
+        throw new Error('Database connection is required. Ask your administrator to configure SmartAttend.');
+      }
       const cleanEmail = email.toLowerCase().trim();
-      let matchedUser = null;
-
-      if (cleanEmail === DEMO_TEACHER.email || roleHint === 'teacher') {
-        matchedUser = { ...DEMO_TEACHER };
-      } else {
-        const matchedStudent = DEMO_STUDENTS.find(s => s.email.toLowerCase() === cleanEmail) 
-          || DEMO_STUDENTS.find(s => s.roll_number === email.trim()) 
-          || DEMO_STUDENTS[0];
-        matchedUser = { ...matchedStudent };
+      const matchedUser = cleanEmail === DEMO_TEACHER.email
+        ? { ...DEMO_TEACHER }
+        : DEMO_STUDENTS.find(s => s.email.toLowerCase() === cleanEmail);
+      const expectedPassword = matchedUser?.role === 'teacher' ? 'password123' : 'student123';
+      if (!matchedUser || matchedUser.role !== roleHint || password !== expectedPassword) {
+        throw new Error('Invalid demo credentials. Use the evaluation profile buttons below.');
       }
 
       setUser(matchedUser);
@@ -137,10 +137,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  /**
-   * Quick-login helper for demo evaluation
-   */
   const loginAsDemo = (type, studentId = null) => {
+    if (!isDemoMode()) {
+      throw new Error('Demo login is disabled when SmartAttend is connected to a database.');
+    }
     let selectedUser;
     if (type === 'teacher') {
       selectedUser = { ...DEMO_TEACHER };
@@ -156,19 +156,32 @@ export function AuthProvider({ children }) {
     return selectedUser;
   };
 
-  /**
-   * Log out
-   */
   const logout = async () => {
     if (isSupabaseConfigured() && supabase) {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     }
     setUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
   };
 
+  const requestPasswordReset = async (email) => {
+    const client = requireSupabase();
+    const { error } = await client.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${window.location.origin}/reset-password`
+    });
+    if (error) throw error;
+  };
+
+  const updatePassword = async (password) => {
+    const client = requireSupabase();
+    const { error } = await client.auth.updateUser({ password });
+    if (error) throw error;
+  };
+
   const isTeacher = user?.role === 'teacher';
   const isStudent = user?.role === 'student';
+  const isAdmin = user?.role === 'admin';
 
   return (
     <AuthContext.Provider
@@ -178,11 +191,15 @@ export function AuthProvider({ children }) {
         login,
         loginAsDemo,
         logout,
+        requestPasswordReset,
+        updatePassword,
         isTeacher,
         isStudent,
+        isAdmin,
         demoStudents: DEMO_STUDENTS,
         demoTeacher: DEMO_TEACHER,
-        isSupabaseReady: isSupabaseConfigured()
+        isSupabaseReady: isSupabaseConfigured(),
+        isDemoMode: isDemoMode()
       }}
     >
       {children}

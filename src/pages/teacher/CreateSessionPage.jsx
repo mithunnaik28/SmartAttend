@@ -1,54 +1,29 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
 import { useAttendance } from '../../context/AttendanceContext';
 import { 
   PlusCircle, 
   Clock, 
-  Calendar, 
   BookOpen, 
   Layers, 
-  User, 
   FileText, 
   ArrowRight,
-  ShieldAlert,
   Sparkles
 } from 'lucide-react';
 import Button from '../../components/common/Button';
 
 export default function CreateSessionPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { createNewSession } = useAttendance();
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    className: 'B.Tech CS 3rd Year',
-    subject: 'Data Structures & Algorithms',
-    section: 'Section A',
-    sessionDate: new Date().toISOString().split('T')[0],
+    className: '',
+    subject: '',
+    section: '',
     durationMinutes: 15,
-    teacherName: user?.full_name || 'Dr. Sarah Jenkins',
-    description: 'Lecture Attendance Session with Auto-Expiry QR'
+    description: ''
   });
-
-  const subjectOptions = [
-    'Data Structures & Algorithms',
-    'Database Management Systems',
-    'Computer Networks',
-    'Operating Systems',
-    'Web Technologies',
-    'Software Engineering',
-    'Artificial Intelligence'
-  ];
-
-  const classOptions = [
-    'B.Tech CS 3rd Year',
-    'B.Tech CS 2nd Year',
-    'B.Tech CS 4th Year',
-    'MCA 1st Year',
-    'M.Tech Computer Science'
-  ];
 
   const durationOptions = [
     { label: '5 Minutes (Quick Pulse Check)', value: 5 },
@@ -87,6 +62,9 @@ export default function CreateSessionPage() {
 
       <div className="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-card">
         <form onSubmit={handleSubmit} className="space-y-6">
+          <p className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
+            Class and section must match the values assigned to students by your administrator.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Class Name */}
             <div>
@@ -94,16 +72,15 @@ export default function CreateSessionPage() {
                 <BookOpen className="w-3.5 h-3.5 text-brand-600" />
                 Class / Degree
               </label>
-              <select
+              <input
+                type="text"
                 value={formData.className}
                 onChange={(e) => setFormData({ ...formData, className: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                maxLength={120}
                 required
-              >
-                {classOptions.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                placeholder="Use the class name assigned to students"
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              />
             </div>
 
             {/* Section */}
@@ -112,16 +89,15 @@ export default function CreateSessionPage() {
                 <Layers className="w-3.5 h-3.5 text-brand-600" />
                 Section
               </label>
-              <select
+              <input
+                type="text"
                 value={formData.section}
                 onChange={(e) => setFormData({ ...formData, section: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                maxLength={64}
                 required
-              >
-                <option value="Section A">Section A</option>
-                <option value="Section B">Section B</option>
-                <option value="Section C">Section C</option>
-              </select>
+                placeholder="Exact section name, e.g. Section A"
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              />
             </div>
           </div>
 
@@ -130,34 +106,18 @@ export default function CreateSessionPage() {
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Subject Name
             </label>
-            <select
+            <input
+              type="text"
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              maxLength={120}
+              placeholder="e.g. Mathematics"
               required
-            >
-              {subjectOptions.map((sub) => (
-                <option key={sub} value={sub}>{sub}</option>
-              ))}
-            </select>
+              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+            />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Session Date */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-brand-600" />
-                Session Date
-              </label>
-              <input
-                type="date"
-                value={formData.sessionDate}
-                onChange={(e) => setFormData({ ...formData, sessionDate: e.target.value })}
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                required
-              />
-            </div>
-
+          <div>
             {/* Session Duration */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
@@ -175,21 +135,6 @@ export default function CreateSessionPage() {
                 ))}
               </select>
             </div>
-          </div>
-
-          {/* Teacher Name (Read-only or editable) */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-brand-600" />
-              Instructor / Teacher Name
-            </label>
-            <input
-              type="text"
-              value={formData.teacherName}
-              onChange={(e) => setFormData({ ...formData, teacherName: e.target.value })}
-              className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-              required
-            />
           </div>
 
           {/* Description */}

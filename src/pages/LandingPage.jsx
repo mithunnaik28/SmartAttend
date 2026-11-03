@@ -4,9 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   QrCode, 
   ShieldCheck, 
-  Zap, 
   Clock, 
-  Users, 
   BarChart3, 
   ArrowRight, 
   CheckCircle2, 
@@ -19,16 +17,12 @@ import Badge from '../components/common/Badge';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { user, loginAsDemo, isTeacher } = useAuth();
-
-  const handleLaunch = (role, studentId = null) => {
-    loginAsDemo(role, studentId);
-    if (role === 'teacher') {
-      navigate('/teacher/dashboard');
-    } else {
-      navigate('/student/dashboard');
-    }
-  };
+  const { user, isDemoMode } = useAuth();
+  const dashboardPath = {
+    admin: '/admin/users',
+    teacher: '/teacher/dashboard',
+    student: '/student/dashboard'
+  }[user?.role] || '/login';
 
   return (
     <div className="min-h-screen bg-slate-50 selection:bg-brand-500 selection:text-white">
@@ -52,7 +46,7 @@ export default function LandingPage() {
               variant="primary"
               size="sm"
               icon={ArrowRight}
-              onClick={() => navigate(isTeacher ? '/teacher/dashboard' : '/student/dashboard')}
+              onClick={() => navigate(dashboardPath)}
             >
               Go to Dashboard
             </Button>
@@ -69,49 +63,55 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-20 text-center">
+      <section
+        className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28 text-center overflow-hidden rounded-[2rem] bg-cover bg-center text-white"
+        style={{
+          backgroundImage: "linear-gradient(110deg, rgba(8, 24, 50, 0.88), rgba(17, 44, 82, 0.70)), url('https://images.unsplash.com/photo-1562774053-701939374585?auto=format&fit=crop&w=2000&q=85')"
+        }}
+      >
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-50 border border-brand-200/70 text-brand-700 text-xs font-semibold mb-6 animate-in fade-in">
           <Sparkles className="w-3.5 h-3.5 text-brand-600" />
           Next-Gen School & College Attendance Management
         </div>
 
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight max-w-4xl mx-auto leading-tight sm:leading-none">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight max-w-4xl mx-auto leading-tight sm:leading-none">
           Frictionless Attendance with{' '}
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-indigo-600">
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-sky-300 to-cyan-200">
             Dynamic QR Codes
           </span>
         </h1>
 
-        <p className="mt-6 text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
+        <p className="mt-6 text-base sm:text-lg text-white/85 max-w-2xl mx-auto leading-relaxed">
           Empower instructors to create auto-expiring QR sessions in seconds. 
           Students scan via their smartphone cameras with instant cryptographic validation and duplicate rejection.
         </p>
 
-        {/* Quick Launch Buttons for Hackathon Jury */}
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 max-w-md mx-auto">
-          <Button
-            variant="primary"
-            size="lg"
-            icon={ArrowRight}
-            onClick={() => handleLaunch('teacher')}
-            className="w-full sm:w-auto shadow-lg shadow-brand-500/25"
-          >
-            Launch as Faculty (Teacher)
-          </Button>
-
-          <Button
-            variant="outline"
-            size="lg"
-            icon={Smartphone}
-            onClick={() => handleLaunch('student')}
-            className="w-full sm:w-auto bg-white"
-          >
-            Launch as Student
-          </Button>
+          {isDemoMode ? (
+            <Button
+              variant="primary"
+              size="lg"
+              icon={ArrowRight}
+              onClick={() => navigate('/login')}
+              className="w-full sm:w-auto shadow-lg shadow-brand-500/25"
+            >
+              Open Demo
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="lg"
+              icon={ArrowRight}
+              onClick={() => navigate('/login')}
+              className="w-full sm:w-auto shadow-lg shadow-brand-500/25"
+            >
+              Sign in to SmartAttend
+            </Button>
+          )}
         </div>
 
         {/* Live Feature Badges */}
-        <div className="mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-slate-500 font-medium">
+        <div className="mt-12 flex flex-wrap items-center justify-center gap-4 sm:gap-6 text-xs text-white/85 font-medium">
           <span className="flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Anti-Duplicate Enforcement
           </span>
@@ -176,7 +176,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <span className="font-bold text-slate-900">SmartAttend</span>
-            <span>• Hackathon Prototype</span>
+            <span>• School Attendance Platform</span>
           </div>
           <div>
             Built with React.js, Tailwind CSS, Vite & Supabase PostgreSQL
