@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAttendance } from '../../context/AttendanceContext';
 import { attendanceService } from '../../services/attendanceService';
+import { useToast } from '../../context/ToastContext';
 import { 
   ScanLine, 
   CheckCircle2, 
@@ -24,9 +25,11 @@ import { formatDate, formatTime, formatRelativeTime } from '../../utils/formatte
 export default function StudentDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { sessions, attendanceRecords } = useAttendance();
+  const { attendanceRecords } = useAttendance();
+  const toast = useToast();
 
   const [studentHistory, setStudentHistory] = useState([]);
+  const [summary, setSummary] = useState({ total_sessions: 0, classes_attended: 0, classes_missed: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,22 +37,26 @@ export default function StudentDashboard() {
       if (!user) return;
       setLoading(true);
       try {
-        const records = await attendanceService.getStudentAttendance(user.id, user.roll_number);
+        const [records, stats] = await Promise.all([
+          attendanceService.getStudentAttendance(user.id, user.roll_number),
+          attendanceService.getStudentSummary(user)
+        ]);
         setStudentHistory(records);
-      } catch (e) {
-        console.error('Failed to fetch student attendance', e);
+        setSummary(stats);
+      } catch (error) {
+        console.error('Failed to fetch student attendance', error);
+        toast.error('Attendance could not be loaded', error.message);
       } finally {
         setLoading(false);
       }
     };
 
     fetchHistory();
-  }, [user, attendanceRecords]);
+  }, [user, attendanceRecords, toast]);
 
-  // Total eligible sessions count
-  const totalClasses = Math.max(sessions.length, 5);
-  const classesAttended = studentHistory.length;
-  const classesMissed = Math.max(0, totalClasses - classesAttended);
+  const totalClasses = summary.total_sessions;
+  const classesAttended = summary.classes_attended;
+  const classesMissed = summary.classes_missed;
   const overallPercentage = totalClasses > 0 ? Math.round((classesAttended / totalClasses) * 100) : 0;
 
   return (

@@ -2,9 +2,19 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { LogOut, QrCode, Shield, User, Menu, Sparkles, Database } from 'lucide-react';
 import Badge from './Badge';
+import { useToast } from '../../context/ToastContext';
 
 export default function Navbar({ onMenuToggle }) {
-  const { user, logout, isTeacher, isSupabaseReady } = useAuth();
+  const { user, logout, isTeacher, isSupabaseReady, isDemoMode } = useAuth();
+  const toast = useToast();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      toast.error('Could not sign out', error.message);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 transition-all">
@@ -39,8 +49,8 @@ export default function Navbar({ onMenuToggle }) {
           {/* Mode Indicator */}
           <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-50 border-slate-200 text-slate-600">
             <Database className="w-3.5 h-3.5 text-brand-600" />
-            <span>{isSupabaseReady ? 'Supabase Connected' : 'Demo State Mode'}</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{isSupabaseReady ? 'Supabase configured' : isDemoMode ? 'Demo State Mode' : 'Database not configured'}</span>
+            <span className={`w-2 h-2 rounded-full ${isSupabaseReady ? 'bg-brand-500' : isDemoMode ? 'bg-amber-500' : 'bg-rose-500'}`} />
           </div>
 
           {/* User profile dropdown info */}
@@ -53,7 +63,7 @@ export default function Navbar({ onMenuToggle }) {
                 <div className="flex items-center justify-end gap-1.5 mt-0.5">
                   <Badge
                     size="sm"
-                    variant={isTeacher ? 'brand' : 'purple'}
+                    variant={isTeacher || user.role === 'admin' ? 'brand' : 'purple'}
                     className="capitalize"
                   >
                     {user.role} {user.roll_number ? `(${user.roll_number})` : ''}
@@ -61,9 +71,9 @@ export default function Navbar({ onMenuToggle }) {
                 </div>
               </div>
 
-              {user.avatar ? (
+              {user.avatar || user.avatar_url ? (
                 <img
-                  src={user.avatar}
+                  src={user.avatar || user.avatar_url}
                   alt={user.full_name}
                   className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-200/80"
                 />
@@ -74,7 +84,7 @@ export default function Navbar({ onMenuToggle }) {
               )}
 
               <button
-                onClick={logout}
+                onClick={handleLogout}
                 title="Sign out"
                 className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
                 aria-label="Logout"

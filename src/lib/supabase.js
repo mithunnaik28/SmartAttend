@@ -1,18 +1,30 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+function hasValidSupabaseUrl() {
+  if (!supabaseUrl || supabaseUrl.includes('your-project-id')) return false;
+  try {
+    const url = new URL(supabaseUrl);
+    return ['https:', 'http:'].includes(url.protocol) && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
 
 export const isSupabaseConfigured = () => {
   return Boolean(
-    supabaseUrl && 
+    hasValidSupabaseUrl() &&
     supabaseAnonKey && 
-    supabaseUrl !== 'https://your-project-id.supabase.co' &&
-    !supabaseUrl.includes('your-project-id')
+    !/^your[-_]/i.test(supabaseAnonKey) &&
+    supabaseAnonKey !== '******'
   );
 };
 
-// Create real client if credentials exist, otherwise a safe fallback client
+export const isDemoMode = () =>
+  !isSupabaseConfigured() && import.meta.env.VITE_DEMO_MODE === 'true';
+
 export const supabase = isSupabaseConfigured()
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -21,3 +33,10 @@ export const supabase = isSupabaseConfigured()
       }
     })
   : null;
+
+export function requireSupabase() {
+  if (!supabase) {
+    throw new Error('SmartAttend is not connected to Supabase. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+  }
+  return supabase;
+}

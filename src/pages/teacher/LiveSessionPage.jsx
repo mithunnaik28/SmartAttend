@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAttendance } from '../../context/AttendanceContext';
-import { useAuth } from '../../context/AuthContext';
 import { attendanceService } from '../../services/attendanceService';
+import { useToast } from '../../context/ToastContext';
 import QRCodeDisplay from '../../components/teacher/QRCodeDisplay';
 import LiveAttendanceFeed from '../../components/teacher/LiveAttendanceFeed';
 import EmptyState from '../../components/common/EmptyState';
@@ -12,12 +12,14 @@ import Button from '../../components/common/Button';
 export default function LiveSessionPage() {
   const navigate = useNavigate();
   const { activeSession, closeSession, sessions } = useAttendance();
-  const { demoStudents } = useAuth();
+  const toast = useToast();
 
   const [sessionAttendees, setSessionAttendees] = useState([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [feedError, setFeedError] = useState('');
   const [selectedSession, setSelectedSession] = useState(activeSession || sessions[0] || null);
+  const [totalStudents, setTotalStudents] = useState(0);
 
   // Sync selected session if activeSession changes
   useEffect(() => {
@@ -34,8 +36,10 @@ export default function LiveSessionPage() {
     try {
       const records = await attendanceService.getSessionAttendance(selectedSession.id);
       setSessionAttendees(records);
+      setFeedError('');
     } catch (e) {
       console.error('Error fetching live session attendance', e);
+      setFeedError(e.message || 'Attendance feed could not be refreshed.');
     }
   };
 
@@ -45,6 +49,22 @@ export default function LiveSessionPage() {
     const interval = setInterval(fetchAttendees, 3000);
     return () => clearInterval(interval);
   }, [selectedSession]);
+
+  useEffect(() => {
+    if (!selectedSession) return;
+    let active = true;
+    attendanceService.getStudents()
+      .then(students => {
+        if (active) {
+          setTotalStudents(students.filter(student =>
+            student.class_name === selectedSession.class_name &&
+            student.section === selectedSession.section
+          ).length);
+        }
+      })
+      .catch(error => toast.error('Class roster could not be loaded', error.message));
+    return () => { active = false; };
+  }, [selectedSession, toast]);
 
   const handleCloseSession = async (sessionId) => {
     if (!window.confirm('Are you sure you want to close this session? Students will no longer be able to mark attendance.')) {
@@ -141,9 +161,14 @@ export default function LiveSessionPage() {
 
         {/* Right: Live Attendee Stream */}
         <div className="lg:col-span-5">
+          {feedError && (
+            <div role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+              Live attendance could not be refreshed: {feedError}
+            </div>
+          )}
           <LiveAttendanceFeed
             records={sessionAttendees}
-            totalStudents={demoStudents.length || 5}
+            totalStudents={totalStudents}
           />
         </div>
       </div>

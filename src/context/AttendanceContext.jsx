@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { attendanceService, initDemoStorage } from '../services/attendanceService';
 import { useToast } from './ToastContext';
 import { useAuth } from './AuthContext';
+import { isDemoMode } from '../lib/supabase';
 
 const AttendanceContext = createContext(null);
 
@@ -17,23 +18,34 @@ export function AttendanceProvider({ children }) {
   // Initialize data on mount
   useEffect(() => {
     initDemoStorage();
+    if (!user && !isDemoMode()) {
+      setLoading(false);
+      setSessions([]);
+      setAttendanceRecords([]);
+      return;
+    }
     loadInitialData();
   }, [user]);
 
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const sessList = await attendanceService.getTeacherSessions(user?.id);
+      const sessList = user?.role === 'teacher'
+        ? await attendanceService.getTeacherSessions(user.id)
+        : [];
       setSessions(sessList);
 
       // Find the first active session if available
       const live = sessList.find(s => s.is_active && new Date(s.expires_at) > new Date());
       setActiveSession(live || null);
 
-      const allAtt = await attendanceService.getAllAttendance();
+      const allAtt = user?.role === 'student'
+        ? await attendanceService.getStudentAttendance(user.id, user.roll_number)
+        : await attendanceService.getAllAttendance();
       setAttendanceRecords(allAtt);
     } catch (err) {
       console.error('Failed to load attendance data:', err);
+      toast.error('Attendance data could not be loaded', err.message);
     } finally {
       setLoading(false);
     }
@@ -46,8 +58,7 @@ export function AttendanceProvider({ children }) {
     try {
       const created = await attendanceService.createSession({
         ...sessionData,
-        teacherId: user?.id,
-        teacherName: user?.full_name
+        teacherId: user?.id
       });
       setSessions(prev => [created, ...prev]);
       setActiveSession(created);
@@ -91,7 +102,9 @@ export function AttendanceProvider({ children }) {
       if (result.success) {
         toast.success('Attendance Recorded!', result.message);
         // Refresh local attendance records
-        const allAtt = await attendanceService.getAllAttendance();
+        const allAtt = user?.role === 'student'
+          ? await attendanceService.getStudentAttendance(user.id, user.roll_number)
+          : await attendanceService.getAllAttendance();
         setAttendanceRecords(allAtt);
       } else {
         // Specific error handling for duplicate, expired, closed, invalid

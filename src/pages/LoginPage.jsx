@@ -8,32 +8,41 @@ import {
   Mail, 
   Lock, 
   ArrowRight, 
-  Sparkles, 
-  UserCheck,
-  CheckCircle2,
-  Database
+  Sparkles
 } from 'lucide-react';
 import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, loginAsDemo, demoStudents, demoTeacher, isSupabaseReady } = useAuth();
+  const {
+    login,
+    loginAsDemo,
+    requestPasswordReset,
+    demoStudents,
+    demoTeacher,
+    isSupabaseReady,
+    isDemoMode
+  } = useAuth();
   const toast = useToast();
 
   const [role, setRole] = useState('teacher'); // 'teacher' or 'student'
-  const [email, setEmail] = useState('teacher@smartattend.edu');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState(isDemoMode ? 'teacher@smartattend.edu' : '');
+  const [password, setPassword] = useState(isDemoMode ? 'password123' : '');
   const [loading, setLoading] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   const handleRoleChange = (newRole) => {
     setRole(newRole);
-    if (newRole === 'teacher') {
+    if (isDemoMode && newRole === 'teacher') {
       setEmail(demoTeacher.email);
       setPassword('password123');
-    } else {
+    } else if (isDemoMode) {
       setEmail(demoStudents[0].email);
       setPassword('student123');
+    } else {
+      setEmail('');
+      setPassword('');
     }
   };
 
@@ -46,23 +55,40 @@ export default function LoginPage() {
 
     if (result.success) {
       toast.success('Welcome!', `Logged in as ${result.user?.full_name || 'User'}`);
-      if (role === 'teacher') {
-        navigate('/teacher/dashboard');
-      } else {
-        navigate('/student/dashboard');
-      }
+      const routes = {
+        admin: '/admin/users',
+        teacher: '/teacher/dashboard',
+        student: '/student/dashboard'
+      };
+      navigate(routes[result.user?.role] || '/login');
     } else {
       toast.error('Authentication Error', result.error || 'Invalid credentials');
     }
   };
 
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      toast.warning('Email required', 'Enter your account email first.');
+      return;
+    }
+    setResettingPassword(true);
+    try {
+      await requestPasswordReset(email);
+      toast.success('Reset email sent', 'Check your inbox for the password reset link.');
+    } catch (error) {
+      toast.error('Could not send reset email', error.message);
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const handleQuickDemoSelect = (type, studentId = null) => {
-    const user = loginAsDemo(type, studentId);
-    toast.success('Demo Profile Loaded', `Switched to ${user.full_name}`);
-    if (type === 'teacher') {
-      navigate('/teacher/dashboard');
-    } else {
-      navigate('/student/dashboard');
+    try {
+      const user = loginAsDemo(type, studentId);
+      toast.success('Demo Profile Loaded', `Switched to ${user.full_name}`);
+      navigate(type === 'teacher' ? '/teacher/dashboard' : '/student/dashboard');
+    } catch (error) {
+      toast.error('Demo login unavailable', error.message);
     }
   };
 
@@ -80,7 +106,7 @@ export default function LoginPage() {
           }`}
         >
           <School className="w-4 h-4 text-brand-600" />
-          Faculty / Teacher
+          Staff / Teacher
         </button>
 
         <button
@@ -101,7 +127,7 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-            {role === 'teacher' ? 'Faculty Email Address' : 'Student Email or Roll Number'}
+            {role === 'teacher' ? 'Staff / Administrator Email' : 'Student Email Address'}
           </label>
           <div className="relative">
             <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -109,7 +135,7 @@ export default function LoginPage() {
               type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={role === 'teacher' ? 'teacher@smartattend.edu' : '101 or rahul@student.edu'}
+              placeholder={role === 'teacher' ? 'teacher@school.edu' : 'student@school.edu'}
               className="w-full pl-10 pr-3 py-2.5 text-xs rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium"
               required
             />
@@ -119,7 +145,7 @@ export default function LoginPage() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="block text-xs font-semibold text-slate-700">Password</label>
-            <span className="text-[11px] text-slate-400">Default: password123</span>
+            {isDemoMode && <span className="text-[11px] text-slate-400">Demo password shown below</span>}
           </div>
           <div className="relative">
             <Lock className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -141,18 +167,29 @@ export default function LoginPage() {
           icon={ArrowRight}
           className="w-full mt-2"
         >
-          Sign In as {role === 'teacher' ? 'Faculty' : 'Student'}
+          Sign In
         </Button>
       </form>
 
+      {isSupabaseReady && (
+        <button
+          type="button"
+          onClick={handlePasswordReset}
+          disabled={resettingPassword}
+          className="w-full text-xs font-semibold text-brand-700 hover:text-brand-900 disabled:opacity-50"
+        >
+          {resettingPassword ? 'Sending reset email…' : 'Forgot your password?'}
+        </button>
+      )}
+
       {/* 1-Click Demo Profiles for Evaluators */}
-      <div className="pt-4 border-t border-slate-100">
+      {isDemoMode && <div className="pt-4 border-t border-slate-100">
         <div className="flex items-center justify-between mb-2.5">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
             <Sparkles className="w-3.5 h-3.5 text-brand-600" /> 1-Click Evaluation Logins
           </span>
           <Badge size="sm" variant={isSupabaseReady ? 'brand' : 'default'}>
-            {isSupabaseReady ? 'Supabase Auth' : 'Demo Engine'}
+            Demo Engine
           </Badge>
         </div>
 
@@ -196,6 +233,13 @@ export default function LoginPage() {
           </div>
         )}
       </div>
+      }
+
+      {!isSupabaseReady && !isDemoMode && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+          Database connection is required. Ask your administrator to configure Supabase before signing in.
+        </div>
+      )}
     </div>
   );
 }

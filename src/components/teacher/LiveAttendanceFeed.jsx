@@ -48,9 +48,13 @@ export default function LiveAttendanceFeed({ records = [], totalStudents = 5 }) 
               className="flex items-center justify-between p-3 rounded-2xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-all animate-in fade-in slide-in-from-top-2 duration-300"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs shrink-0 border border-brand-200">
-                  {record.student_name ? record.student_name.charAt(0) : 'S'}
-                </div>
+                {record.avatar ? (
+                  <img src={record.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full border border-brand-200 object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs shrink-0 border border-brand-200">
+                    {record.student_name ? record.student_name.charAt(0) : 'S'}
+                  </div>
+                )}
                 <div className="truncate">
                   <div className="text-xs font-bold text-slate-900 truncate">
                     {record.student_name || 'Student'}

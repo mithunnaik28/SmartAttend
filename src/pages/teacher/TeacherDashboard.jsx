@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAttendance } from '../../context/AttendanceContext';
@@ -20,15 +20,24 @@ import Button from '../../components/common/Button';
 import Badge from '../../components/common/Badge';
 import AttendanceChart from '../../components/teacher/AttendanceChart';
 import { formatTime, formatDate, formatRelativeTime } from '../../utils/formatters';
+import { attendanceService } from '../../services/attendanceService';
+import { useToast } from '../../context/ToastContext';
 
 export default function TeacherDashboard() {
   const navigate = useNavigate();
-  const { user, demoStudents } = useAuth();
+  const { user } = useAuth();
   const { sessions, attendanceRecords, activeSession } = useAttendance();
+  const toast = useToast();
+  const [students, setStudents] = useState([]);
 
-  // Compute live KPIs
-  const totalStudents = demoStudents?.length || 5;
-  const totalClasses = sessions?.length || 5;
+  useEffect(() => {
+    attendanceService.getStudents()
+      .then(setStudents)
+      .catch(error => toast.error('Student roster could not be loaded', error.message));
+  }, [toast]);
+
+  const totalStudents = students.length;
+  const totalClasses = sessions.length;
 
   // Filter today's attendance records
   const todayRecords = useMemo(() => {
@@ -48,6 +57,47 @@ export default function TeacherDashboard() {
 
   const absentStudentsCount = Math.max(0, totalStudents - presentStudentsCount);
   const attendanceRate = totalStudents > 0 ? Math.round((presentStudentsCount / totalStudents) * 100) : 0;
+
+  const analytics = useMemo(() => {
+    const dates = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      return date;
+    });
+
+    const weeklyData = dates.map(date => {
+      const daySessions = sessions.filter(session =>
+        new Date(session.created_at).toDateString() === date.toDateString()
+      );
+      const expected = daySessions.reduce((total, session) => total + students.filter(student =>
+        student.class_name === session.class_name && student.section === session.section
+      ).length, 0);
+      const sessionIds = new Set(daySessions.map(session => session.id));
+      const present = attendanceRecords.filter(record => sessionIds.has(record.session_id)).length;
+      return {
+        day: date.toLocaleDateString(undefined, { weekday: 'short' }),
+        attendanceRate: expected ? Math.round((present / expected) * 100) : 0,
+        hasSessions: expected > 0
+      };
+    }).filter(day => day.hasSessions);
+
+    const subjects = new Map();
+    sessions.forEach(session => {
+      const expected = students.filter(student =>
+        student.class_name === session.class_name && student.section === session.section
+      ).length;
+      if (!expected) return;
+      const current = subjects.get(session.subject) || { subject: session.subject, present: 0, expected: 0 };
+      current.expected += expected;
+      current.present += attendanceRecords.filter(record => record.session_id === session.id).length;
+      subjects.set(session.subject, current);
+    });
+    const subjectData = Array.from(subjects.values()).map(subject => ({
+      subject: subject.subject,
+      attendance: Math.round((subject.present / subject.expected) * 100)
+    }));
+    return { weeklyData, subjectData };
+  }, [sessions, students, attendanceRecords]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
@@ -127,7 +177,7 @@ export default function TeacherDashboard() {
         <StatCard
           title="Total Students"
           value={totalStudents}
-          subtitle="Enrolled in Section A"
+          subtitle="Students in your classes"
           icon={Users}
           color="blue"
         />
@@ -135,7 +185,7 @@ export default function TeacherDashboard() {
         <StatCard
           title="Total Classes"
           value={totalClasses}
-          subtitle="Recorded sessions"
+          subtitle="Sessions you created"
           icon={BookOpen}
           color="indigo"
         />
@@ -146,8 +196,6 @@ export default function TeacherDashboard() {
           subtitle="Average turnout"
           icon={Percent}
           color="emerald"
-          trend="+5%"
-          trendDirection="up"
         />
 
         <StatCard
@@ -177,7 +225,7 @@ export default function TeacherDashboard() {
 
       {/* Attendance Analytics Charts */}
       <div>
-        <AttendanceChart />
+        <AttendanceChart weeklyData={analytics.weeklyData} subjectData={analytics.subjectData} />
       </div>
 
       {/* Bottom Grid: Recent Activity & Recent Sessions */}
@@ -204,9 +252,13 @@ export default function TeacherDashboard() {
                 className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 border border-slate-100 text-xs"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
-                    {rec.student_name ? rec.student_name.charAt(0) : 'S'}
-                  </div>
+                  {rec.avatar ? (
+                    <img src={rec.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs">
+                      {rec.student_name ? rec.student_name.charAt(0) : 'S'}
+                    </div>
+                  )}
                   <div>
                     <div className="font-bold text-slate-900">{rec.student_name}</div>
                     <div className="text-[11px] text-slate-500">

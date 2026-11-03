@@ -203,9 +203,13 @@ export default function AttendanceTable({ records = [], isLoading = false }) {
                 <tr key={record.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="py-3.5 px-4 font-semibold text-slate-900">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[11px]">
-                        {record.student_name ? record.student_name.charAt(0) : 'S'}
-                      </div>
+                      {record.avatar ? (
+                        <img src={record.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[11px]">
+                          {record.student_name ? record.student_name.charAt(0) : 'S'}
+                        </div>
+                      )}
                       <span>{record.student_name}</span>
                     </div>
                   </td>

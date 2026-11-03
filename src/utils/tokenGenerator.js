@@ -3,14 +3,12 @@
  * Format: SA-{PREFIX}-{RANDOM_HEX}
  */
 export function generateSessionToken(prefix = 'SESS') {
-  const array = new Uint8Array(8);
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
-    window.crypto.getRandomValues(array);
-  } else {
-    for (let i = 0; i < 8; i++) {
-      array[i] = Math.floor(Math.random() * 256);
-    }
+  const cryptoApi = globalThis.crypto;
+  if (!cryptoApi?.getRandomValues) {
+    throw new Error('Secure QR token generation is unavailable in this browser.');
   }
+  const array = new Uint8Array(16);
+  cryptoApi.getRandomValues(array);
   const hex = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('').toUpperCase();
   const timestamp = Date.now().toString(36).toUpperCase();
   return `SA-${prefix.toUpperCase().slice(0, 4)}-${timestamp}-${hex}`;

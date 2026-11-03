@@ -1,6 +1,5 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { supabase, isSupabaseConfigured, isDemoMode, requireSupabase } from '../lib/supabase';
 import { 
-  DEMO_TEACHER, 
   DEMO_STUDENTS, 
   DEMO_SESSIONS, 
   DEMO_ATTENDANCE 
@@ -13,8 +12,37 @@ const STORAGE_KEYS = {
   ATTENDANCE: 'smartattend_attendance',
   STUDENTS: 'smartattend_students'
 };
+const avatarUrlCache = new Map();
 
-// Initialize localStorage with demo data if empty
+function requireDemoMode() {
+  if (!isDemoMode()) {
+    throw new Error('Demo data is disabled. Configure Supabase to use SmartAttend.');
+  }
+}
+
+async function getAvatarUrl(path) {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  const cached = avatarUrlCache.get(path);
+  if (cached?.url && cached.expiresAt > Date.now()) return cached.url;
+  if (cached?.promise) return cached.promise;
+
+  const promise = requireSupabase()
+    .storage.from('student-avatars')
+    .createSignedUrl(path, 3600)
+    .then(({ data, error }) => {
+      if (error) throw error;
+      avatarUrlCache.set(path, { url: data.signedUrl, expiresAt: Date.now() + 50 * 60 * 1000 });
+      return data.signedUrl;
+    })
+    .catch(error => {
+      avatarUrlCache.delete(path);
+      throw error;
+    });
+  avatarUrlCache.set(path, { promise, expiresAt: 0 });
+  return promise;
+}
+
 function getLocalData(key, defaultData) {
   try {
     const item = localStorage.getItem(key);
@@ -39,7 +67,7 @@ function setLocalData(key, data) {
 
 // Ensure initial demo records are present
 export function initDemoStorage() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !isDemoMode()) return;
   if (!localStorage.getItem(STORAGE_KEYS.SESSIONS)) {
     localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(DEMO_SESSIONS));
   }
@@ -56,6 +84,7 @@ export const attendanceService = {
    * Reset local demo data to initial state for testing
    */
   resetDemoData: () => {
+    requireDemoMode();
     localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(DEMO_SESSIONS));
     localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(DEMO_ATTENDANCE));
     localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(DEMO_STUDENTS));
@@ -67,6 +96,7 @@ export const attendanceService = {
    */
   getTeacherSessions: async (teacherId) => {
     if (isSupabaseConfigured() && supabase) {
+      if (!teacherId) return [];
       const { data, error } = await supabase
         .from('sessions')
         .select('*')
@@ -76,6 +106,7 @@ export const attendanceService = {
       return data;
     }
 
+    requireDemoMode();
     const sessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS);
     return sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   },
@@ -91,10 +122,12 @@ export const attendanceService = {
         .select('*')
         .eq('session_token', cleanToken)
         .single();
+      if (error && error.code !== 'PGRST116') throw error;
       if (error) return null;
       return data;
     }
 
+    requireDemoMode();
     const sessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS);
     return sessions.find(s => s.session_token.toLowerCase() === cleanToken.toLowerCase()) || null;
   },
@@ -109,10 +142,12 @@ export const attendanceService = {
         .select('*')
         .eq('id', sessionId)
         .single();
+      if (error && error.code !== 'PGRST116') throw error;
       if (error) return null;
       return data;
     }
 
+    requireDemoMode();
     const sessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS);
     return sessions.find(s => s.id === sessionId) || null;
   },
@@ -125,10 +160,10 @@ export const attendanceService = {
     subject,
     section,
     durationMinutes = 15,
-    teacherId = DEMO_TEACHER.id,
-    teacherName = DEMO_TEACHER.full_name,
+    teacherId,
     description = ''
   }) => {
+    if (!teacherId) throw new Error('A signed-in teacher profile is required to create a session.');
     const token = generateSessionToken(subject.replace(/[^a-zA-Z]/g, '').slice(0, 4) || 'SESS');
     const now = new Date();
     const expiresAt = new Date(now.getTime() + durationMinutes * 60000).toISOString();
@@ -140,7 +175,6 @@ export const attendanceService = {
       subject,
       section,
       teacher_id: teacherId,
-      teacher_name: teacherName,
       created_at: now.toISOString(),
       expires_at: expiresAt,
       duration_minutes: durationMinutes,
@@ -158,6 +192,7 @@ export const attendanceService = {
       return data;
     }
 
+    requireDemoMode();
     const sessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS);
     sessions.unshift(newSession);
     setLocalData(STORAGE_KEYS.SESSIONS, sessions);
@@ -179,6 +214,7 @@ export const attendanceService = {
       return data;
     }
 
+    requireDemoMode();
     const sessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS);
     const updated = sessions.map(s => s.id === sessionId ? { ...s, is_active: false } : s);
     setLocalData(STORAGE_KEYS.SESSIONS, updated);
@@ -206,7 +242,6 @@ export const attendanceService = {
     if (isSupabaseConfigured() && supabase) {
       const { data, error } = await supabase.rpc('mark_qr_attendance', {
         p_session_token: sessionToken.trim(),
-        p_student_id: student.id,
         p_device_info: deviceInfo
       });
 
@@ -220,6 +255,7 @@ export const attendanceService = {
       return data;
     }
 
+    requireDemoMode();
     // Local / Offline / Demo Mode Execution with real business rules
     const sessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS);
     const session = sessions.find(
@@ -313,25 +349,28 @@ export const attendanceService = {
             full_name,
             roll_number,
             class_name,
-            section
+            section,
+            avatar_url
           )
         `)
         .eq('session_id', sessionId)
         .order('marked_at', { ascending: false });
       if (error) throw error;
-      return data.map(item => ({
+      return Promise.all(data.map(async item => ({
         id: item.id,
         student_id: item.student?.id,
         student_name: item.student?.full_name,
         roll_number: item.student?.roll_number,
         class_name: item.student?.class_name,
         section: item.student?.section,
+        avatar: await getAvatarUrl(item.student?.avatar_url),
         marked_at: item.marked_at,
         status: item.status,
         device_info: item.device_info
-      }));
+      })));
     }
 
+    requireDemoMode();
     const records = getLocalData(STORAGE_KEYS.ATTENDANCE, DEMO_ATTENDANCE);
     return records.filter(r => r.session_id === sessionId);
   },
@@ -355,33 +394,38 @@ export const attendanceService = {
             full_name,
             roll_number,
             class_name,
-            section
+            section,
+            avatar_url
           ),
           session:sessions (
             id,
             subject,
             class_name,
             section,
-            teacher_name
+            teacher:teachers (
+              full_name
+            )
           )
         `)
         .order('marked_at', { ascending: false });
 
       if (error) throw error;
-      records = data.map(item => ({
+      records = await Promise.all(data.map(async item => ({
         id: item.id,
         student_id: item.student?.id,
         student_name: item.student?.full_name,
         roll_number: item.student?.roll_number,
         class_name: item.student?.class_name || item.session?.class_name,
         section: item.student?.section || item.session?.section,
+        avatar: await getAvatarUrl(item.student?.avatar_url),
         subject: item.session?.subject,
-        teacher_name: item.session?.teacher_name,
+        teacher_name: item.session?.teacher?.full_name,
         marked_at: item.marked_at,
         status: item.status,
         device_info: item.device_info
-      }));
+      })));
     } else {
+      requireDemoMode();
       records = getLocalData(STORAGE_KEYS.ATTENDANCE, DEMO_ATTENDANCE);
     }
 
@@ -411,56 +455,119 @@ export const attendanceService = {
    */
   getStudentAttendance: async (studentId, rollNumber) => {
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase
-        .from('attendance')
-        .select(`
-          id,
-          marked_at,
-          status,
-          device_info,
-          session:sessions (
-            id,
-            subject,
-            class_name,
-            section,
-            teacher_name
-          )
-        `)
-        .eq('student_id', studentId)
-        .order('marked_at', { ascending: false });
-
+      const { data, error } = await supabase.rpc('get_student_attendance_history');
       if (error) throw error;
-      return data.map(item => ({
-        id: item.id,
-        marked_at: item.marked_at,
-        status: item.status,
-        device_info: item.device_info,
-        subject: item.session?.subject,
-        class_name: item.session?.class_name,
-        section: item.session?.section,
-        teacher_name: item.session?.teacher_name
-      }));
+      return data;
     }
 
+    requireDemoMode();
     const records = getLocalData(STORAGE_KEYS.ATTENDANCE, DEMO_ATTENDANCE);
     return records.filter(
       r => r.student_id === studentId || (rollNumber && r.roll_number === rollNumber)
     );
   },
 
-  /**
-   * Get list of all registered students
-   */
-  getStudents: async () => {
+  getStudentSummary: async (student) => {
     if (isSupabaseConfigured() && supabase) {
-      const { data, error } = await supabase
-        .from('students')
-        .select('*')
-        .order('roll_number', { ascending: true });
+      const { data, error } = await supabase.rpc('get_student_attendance_summary');
       if (error) throw error;
       return data;
     }
 
+    requireDemoMode();
+    const finishedSessions = getLocalData(STORAGE_KEYS.SESSIONS, DEMO_SESSIONS).filter(session =>
+      session.class_name === student.class_name &&
+      session.section === student.section &&
+      (!session.is_active || new Date(session.expires_at) <= new Date())
+    );
+    const records = getLocalData(STORAGE_KEYS.ATTENDANCE, DEMO_ATTENDANCE);
+    const classesAttended = new Set(
+      records
+        .filter(record => record.student_id === student.id && finishedSessions.some(session => session.id === record.session_id))
+        .map(record => record.session_id)
+    ).size;
+    return {
+      total_sessions: finishedSessions.length,
+      classes_attended: classesAttended,
+      classes_missed: Math.max(finishedSessions.length - classesAttended, 0)
+    };
+  },
+
+  /**
+   * Get list of all registered students
+   */
+  getStudents: async ({ includeEmail = false } = {}) => {
+    if (isSupabaseConfigured() && supabase) {
+      const { data, error } = await supabase
+        .from('students')
+        .select(includeEmail
+          ? 'id, user_id, full_name, email, roll_number, class_name, section, avatar_url, created_at'
+          : 'id, full_name, roll_number, class_name, section, avatar_url')
+        .order('roll_number', { ascending: true });
+      if (error) throw error;
+      return Promise.all(data.map(async student => ({
+        ...student,
+        avatar: await getAvatarUrl(student.avatar_url)
+      })));
+    }
+
+    requireDemoMode();
     return getLocalData(STORAGE_KEYS.STUDENTS, DEMO_STUDENTS);
+  },
+
+  getTeachers: async () => {
+    const client = requireSupabase();
+    const { data, error } = await client
+      .from('teachers')
+      .select('id, full_name, email, department, created_at')
+      .order('full_name', { ascending: true });
+    if (error) throw error;
+    return data;
+  },
+
+  createManagedUser: async (input) => {
+    const client = requireSupabase();
+    const { data, error } = await client.functions.invoke('admin-create-user', { body: input });
+    if (error) {
+      let message = error.message || 'Account creation failed.';
+      if (error.context && typeof error.context.json === 'function') {
+        const response = await error.context.json();
+        if (response?.error) message = response.error;
+      }
+      throw new Error(message);
+    }
+    if (!data?.profile) {
+      throw new Error('Account provisioning did not return a created profile.');
+    }
+    return data.profile;
+  },
+
+  uploadStudentAvatar: async (studentId, file) => {
+    const mimeTypes = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp'
+    };
+    const extension = mimeTypes[file.type];
+    if (!extension) throw new Error('Choose a JPG, PNG, or WebP image.');
+    if (file.size > 5 * 1024 * 1024) throw new Error('Profile images must be 5 MB or smaller.');
+
+    const client = requireSupabase();
+    const path = `${studentId}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await client.storage
+      .from('student-avatars')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (uploadError) throw uploadError;
+
+    const { error: profileError } = await client
+      .from('students')
+      .update({ avatar_url: path })
+      .eq('id', studentId);
+    if (profileError) {
+      const { error: deleteError } = await client.storage.from('student-avatars').remove([path]);
+      if (deleteError) console.error('Could not remove an unlinked student avatar:', deleteError.message);
+      throw profileError;
+    }
+    return getAvatarUrl(path);
   }
 };
